@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  postgres-auth-server:
+    image: postgres:15
+    container_name: bd_auth_dev
+    restart: always
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: auth_db
+    volumes:
+      - user_auth:/var/lib/postgresql/data
+
+volumes:
+  user_auth:
