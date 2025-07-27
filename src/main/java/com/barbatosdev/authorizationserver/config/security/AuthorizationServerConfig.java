@@ -4,14 +4,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.MediaType;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.oauth2.server.authorization.JdbcOAuth2AuthorizationConsentService;
-import org.springframework.security.oauth2.server.authorization.JdbcOAuth2AuthorizationService;
-import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationConsentService;
-import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
-import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.config.annotation.web.configurers.OAuth2AuthorizationServerConfigurer;
 import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
 import org.springframework.security.web.SecurityFilterChain;
@@ -30,22 +24,21 @@ public class AuthorizationServerConfig {
                 OAuth2AuthorizationServerConfigurer.authorizationServer();
 
         http
+                // SOLO intercepta los endpoints del Authorization Server
                 .securityMatcher(authorizationServerConfigurer.getEndpointsMatcher())
                 .with(authorizationServerConfigurer, (authorizationServer) ->
-                        authorizationServer
-                                .oidc(Customizer.withDefaults())	// Enable OpenID Connect 1.0
+                        authorizationServer.oidc(Customizer.withDefaults())
                 )
-                .authorizeHttpRequests((authorize) ->
-                        authorize
-                                .anyRequest().authenticated()
+                .authorizeHttpRequests(auth -> auth
+                        .anyRequest().authenticated()
                 )
-                .cors(Customizer.withDefaults()) // Necesario para SPA
-                //.csrf(csrf -> csrf.ignoringRequestMatchers("/oauth2/token")) // PKCE desde SPA
-                .exceptionHandling((exceptions) -> exceptions
+                .cors(Customizer.withDefaults())
+                .exceptionHandling(exceptions -> exceptions
                         .defaultAuthenticationEntryPointFor(
                                 new LoginUrlAuthenticationEntryPoint("/login"),
                                 new MediaTypeRequestMatcher(MediaType.TEXT_HTML)
-                        ));
+                        )
+                );
 
         return http.build();
     }
@@ -54,10 +47,15 @@ public class AuthorizationServerConfig {
     @Order(2)
     public SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http) throws Exception {
         http
-                .authorizeHttpRequests(authorize -> authorize.anyRequest().authenticated())
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/api/v1/**").permitAll()
+                        .requestMatchers("/actuator/**", "/h2-console/**").permitAll()
+                        .anyRequest().authenticated()
+                )
+                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/v1/**")) // IMPORTANTE para POST público
                 .formLogin(Customizer.withDefaults())
                 .cors(Customizer.withDefaults())
-                .logout(logout -> logout.logoutSuccessUrl("/")); // opcional
+                .logout(logout -> logout.logoutSuccessUrl("/"));
 
         return http.build();
     }
