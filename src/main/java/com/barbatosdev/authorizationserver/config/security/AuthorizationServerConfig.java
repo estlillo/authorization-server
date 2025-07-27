@@ -1,5 +1,6 @@
 package com.barbatosdev.authorizationserver.config.security;
 
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -13,6 +14,7 @@ import org.springframework.security.web.authentication.LoginUrlAuthenticationEnt
 import org.springframework.security.web.savedrequest.HttpSessionRequestCache;
 import org.springframework.security.web.savedrequest.RequestCache;
 import org.springframework.security.web.util.matcher.MediaTypeRequestMatcher;
+import org.springframework.web.filter.ForwardedHeaderFilter;
 
 @Configuration
 public class AuthorizationServerConfig {
@@ -24,21 +26,22 @@ public class AuthorizationServerConfig {
                 OAuth2AuthorizationServerConfigurer.authorizationServer();
 
         http
-                // SOLO intercepta los endpoints del Authorization Server
                 .securityMatcher(authorizationServerConfigurer.getEndpointsMatcher())
                 .with(authorizationServerConfigurer, (authorizationServer) ->
-                        authorizationServer.oidc(Customizer.withDefaults())
+                        authorizationServer
+                                .oidc(Customizer.withDefaults())	// Enable OpenID Connect 1.0
                 )
-                .authorizeHttpRequests(auth -> auth
-                        .anyRequest().authenticated()
+                .authorizeHttpRequests((authorize) ->
+                        authorize
+                                .anyRequest().authenticated()
                 )
-                .cors(Customizer.withDefaults())
-                .exceptionHandling(exceptions -> exceptions
+                .cors(Customizer.withDefaults()) // Necesario para SPA
+                //.csrf(csrf -> csrf.ignoringRequestMatchers("/oauth2/token")) // PKCE desde SPA
+                .exceptionHandling((exceptions) -> exceptions
                         .defaultAuthenticationEntryPointFor(
                                 new LoginUrlAuthenticationEntryPoint("/login"),
                                 new MediaTypeRequestMatcher(MediaType.TEXT_HTML)
-                        )
-                );
+                        ));
 
         return http.build();
     }
@@ -47,24 +50,28 @@ public class AuthorizationServerConfig {
     @Order(2)
     public SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http) throws Exception {
         http
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/v1/**").permitAll()
-                        .requestMatchers("/actuator/**", "/h2-console/**").permitAll()
-                        .anyRequest().authenticated()
-                )
-                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/v1/**")) // IMPORTANTE para POST público
+                .authorizeHttpRequests(authorize -> authorize.anyRequest().authenticated())
                 .formLogin(Customizer.withDefaults())
                 .cors(Customizer.withDefaults())
-                .logout(logout -> logout.logoutSuccessUrl("/"));
+                .logout(logout -> logout.logoutSuccessUrl("/")); // opcional
 
         return http.build();
     }
 
 
+    @Bean
     public AuthorizationServerSettings authorizationServerSettings() {
         return AuthorizationServerSettings.builder()
-                .issuer("http://localhost:9000") // URL de tu Authorization Server
+                .issuer("http://localhost:8080/auth") // URL de tu Authorization Server
                 .build();
+    }
+
+    @Bean
+    public FilterRegistrationBean<ForwardedHeaderFilter> forwardedHeaderFilter() {
+        ForwardedHeaderFilter filter = new ForwardedHeaderFilter();
+        FilterRegistrationBean<ForwardedHeaderFilter> bean = new FilterRegistrationBean<>(filter);
+        bean.setOrder(0);
+        return bean;
     }
 
 
